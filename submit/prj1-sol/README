@@ -1,6 +1,8 @@
-Name:		XXX
-B-Number:	XXX
-Email:		XXX
+Name:		Ayyalasomayajula Satya Sai Visalakshi
+B-Number:	B00982275
+Email:		sayyalasomay@binghamton.edu
 
 Add text here as needed.
-
+Hey, my output is generating an extra comma at the end of the string and due to piping in java it is giving error.
+Runbning only in java, it is generating output for all the cases with one extra comma at the end
+If you can give me an extra day, i will try to fix it.
