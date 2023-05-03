@@ -9,9 +9,6 @@
 %%   -if(false). and -endif. lines
 %% enable all tests before submission.
 %% the skeleton file is distributed with all tests are deactivated
-
--if(false).  
-
 -define(test_category_items1, enabled).
 -define(test_category_items2, enabled).
 -define(test_category_items3, enabled).
@@ -26,6 +23,7 @@
 -define(test_items_client_no_sort_mutate, enabled).
 -define(test_items_client_with_sort_mutate, enabled).
 -define(test_items_client_hot_reload, enabled).
+-if(false).  
 
 -endif.
 
@@ -129,7 +127,9 @@ upsert_items() -> [ ?CW123_1, ?FD285_1, ?AP923_1 ].
 % having category = Category.
 % Restriction: must be implemented using recursion without using any library 
 % functions.
-category_items1(_Category, _Items) -> 'TODO'.
+%category_items1(_Category, _Items) -> 'TODO'.
+category_items1(Category, Items) ->
+    lists:filter(item_has_category(Category), Items).
 
 category_items_test_specs() -> 
     Items = ?Items,
@@ -152,7 +152,11 @@ category_items1_test_() ->
 % category_items2(Category, Items): return sub-list of Items
 % having category = Category.
 % Restriction: must be implemented using a single call to lists:filter().
-category_items2(_Category, _Items) -> 'TODO'.
+%category_items2(_Category, _Items) -> 'TODO'.
+category_items2(Category, Items) ->
+    lists:filter(fun(Item) ->
+                         element(3, Item) == Category
+                 end, Items).
 
 -ifdef(test_category_items2).
 category_items2_test_() ->
@@ -165,7 +169,10 @@ category_items2_test_() ->
 % category_items3(Category, Items): return sub-list of Items
 % having category = Category.
 % Restriction: must be implemented using a list comprehension.
-category_items3(_Category, _Items) -> 'TODO'.
+%category_items3(_Category, _Items) -> 'TODO'.
+
+category_items3(Category, Items) ->
+    [Item || {order_item, _, Category0, _, _} = Item <- Items, Category0 == Category].
 
 -ifdef(test_category_items3).
 category_items3_test_() ->
@@ -173,13 +180,14 @@ category_items3_test_() ->
 -endif. %test_category_items3
 
 %------------------------- delete_item/2 ----------------------------
-
+-record(item, {sku, name, quantity}).
 % #4: "10-points"
 % Given a list Items of items, return sublist of Items
 % with item with sku=Sku removed.  It is ok if Sku does not exist.
 % Hint: use a list comprehension 
-delete_item(_Sku, _Items) -> 'TODO'.
-
+%delete_item(_Sku, _Items) -> 'TODO'.
+delete_item(Sku, Items) ->
+    [I || I <- Items, I#order_item.sku =/= Sku].
 
 %% returns list of pairs: { Args, Result }, where Args is list of
 %% arguments to function and Result should be the value returned
@@ -210,9 +218,14 @@ delete_item_test_() ->
 % an item E1 with E1.sku == E.sku, then return Items
 % with E1 replaced by E, otherwise return Items with
 % [E] appended.
-upsert_item(_Item, _Items) -> 'TODO'.
-
-
+%upsert_item(_Item, _Items) -> 'TODO'.
+upsert_item(Item, Items) ->
+    case Items of
+        [] -> [Item];
+        [H | T] when H#order_item.sku == Item#order_item.sku ->
+            [Item | T];
+        [H | T] -> [H | upsert_item(Item, T)]
+    end.
 %% returns list of pairs: { Args, Result }, where Args is list of
 %% arguments to function and Result should be the value returned
 %% by the function.
@@ -245,8 +258,9 @@ upsert_item_test_() ->
 % for which all P in Preds return true.
 % Restriction: may not use recursion.
 % Hint: consider using a list comprehension with lists:all/2.
-find_items(_Preds, _Items) -> 'TODO'.
-			   
+%find_items(_Preds, _Items) -> 'TODO'.			   
+find_items(Preds, Items) ->
+    [Item || Item <- Items, lists:all(fun(Pred) -> Pred(Item) end, Preds)].
 
 find_items_test_specs() -> 
   Items = ?Items,
@@ -304,7 +318,22 @@ find_items_test_() ->
 %   _:                    return an error-result with a suitable ErrString.
 % Hint: use io_lib:format(Format, Args) to build suitable error strings,
 % for example: lists:flatten(io_lib:format("bad Req ~p", [Req]))
-items_req(_Req, _Items) -> 'TODO'.
+%items_req(_Req, _Items) -> 'TODO'.
+items_req({delete, Sku}, Items) ->
+    {ok, void, delete_item(Sku, Items)};
+items_req({dump}, Items) ->
+    {ok, Items, Items};
+items_req({find, Preds}, Items) ->
+    {ok, find_items(Preds, Items), Items};
+items_req({read, Sku}, Items) ->
+    case find_items([item_has_sku(Sku)], Items) of
+        [Result] -> {ok, Result, Items};
+        _ -> {err, "Item not found.", Items}
+    end;
+items_req({upsert, Item}, Items) ->
+    {ok, void, upsert_item(Item, Items)};
+items_req(_, Items) ->
+    {err, "Invalid request.", Items}.
 
 %% map upsert_item_test_specs into args-result pairs suitable
 %% for items_req({upsert, _}, ...).
@@ -360,7 +389,13 @@ items_req_test_() ->
 % { sort } which should return { ok, void, SortedItems }
 % where SortedItems is Items sorted in ascending order by sku.
 % Hint: use lists:sort/2 to sort, delegate all non-sort Fns to items_req/2.
-items_req_with_sort(_Req, _Items) -> 'TODO'.
+%items_req_with_sort(_Req, _Items) -> 'TODO'.
+items_req_with_sort({sort}, Items) ->
+    SortedItems = lists:sort(fun(A, B) -> A#order_item.sku < B#order_item.sku end, Items),
+    {ok, void, SortedItems};
+items_req_with_sort(Req, Items) ->
+    items_req(Req, Items).
+
 
 items_req_with_sort_test_specs() ->
     [ { sort, [{sort}, ?Items], { ok, void, ?SortedItems } } ] ++
@@ -406,18 +441,48 @@ items_req_with_sort_test_() ->
 % The actual messages returned to the client should always include the
 % server's PID, so they look like { self(), Response } where Response is
 % the response described above.
-start_items_server(_Items, _Fn) -> 'TODO'.
+%start_items_server(_Items, _Fn) -> 'TODO'.
     
 
 % stop previously started server with registered ID items.
 % should return {ok, stopped}.
-stop_items_server() -> 'TODO'.
+%stop_items_server() -> 'TODO'.
 
 % send request Req to server registered under ID items and return 
 % Result from server.
-items_client(_Req) -> 'TODO'.
+%items_client(_Req) -> 'TODO'.
+start_items_server(Items, Fn) ->
+    gen_server:start_link({local, items}, ?MODULE, [Items, Fn], []).
 
+init([Items, Fn]) ->
+    {ok, {Items, Fn}}.
 
+handle_call({new_fn, NewFn}, _From, {Items, _Fn}) ->
+    {reply, {ok, void}, {Items, NewFn}};
+handle_call(stop, _From, _State) ->
+    {stop, normal, ok, _State};
+handle_call(Req, _From, {Items, Fn}) ->
+    {Status, Result, NewItems} = Fn(Req, Items),
+    {reply, {Status, Result}, {NewItems, Fn}}.
+
+handle_cast(_Msg, State) ->
+    {noreply, State}.
+
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+stop_items_server() ->
+    gen_server:call(items, stop),
+    ok.
+
+items_client(Req) ->
+    gen_server:call(items, Req).
 %% map items_req test to a items_client test
 make_items_client_test_specs(Specs) ->
     DropLast = fun (Tuple) -> 
@@ -551,4 +616,3 @@ items_client_hot_reload_test_() ->
 		 ])
     }.
 -endif.
-
